@@ -214,8 +214,47 @@ async def main():
     @server.list_tools()
     async def handle_list_tools() -> list[Tool]:
         logger.debug("Handling list_tools request")
-        # We're not exposing any tools since we'll be using Claude's built-in web search
-        return []
+        return [
+            Tool(
+                name="deep_research",
+                description="Conduct deep research on a question. Returns a structured research prompt that guides thorough investigation with web search, subquestion generation, content analysis, and report generation.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "research_question": {
+                            "type": "string",
+                            "description": "The research question to investigate",
+                        },
+                    },
+                    "required": ["research_question"],
+                },
+            )
+        ]
+
+    @server.call_tool()
+    async def handle_call_tool(
+        name: str, arguments: dict | None
+    ) -> list[TextContent]:
+        logger.debug(f"Handling call_tool request for {name} with args {arguments}")
+        if name != "deep_research":
+            raise ValueError(f"Unknown tool: {name}")
+
+        if not arguments or "research_question" not in arguments:
+            raise ValueError("Missing required argument: research_question")
+
+        research_question = arguments["research_question"]
+        prompt = PROMPT_TEMPLATE.format(research_question=research_question)
+
+        # Store the research question
+        research_processor.update_research_data("question", research_question)
+        research_processor.add_note(
+            f"Research initiated on question: {research_question}"
+        )
+
+        logger.debug(
+            f"Generated research prompt for question: {research_question}"
+        )
+        return [TextContent(type="text", text=prompt.strip())]
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         logger.debug("Server running with stdio transport")
